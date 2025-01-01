@@ -1,0 +1,76 @@
+#include <16F887.h>
+#device ADC=8
+#fuses HS,NOMCLR,NOWDT,NOPROTECT,NOPUT,NOLVP,NOBROWNOUT,NOCPD
+#use delay(clock=8000000)  // 8 MHz harici osilatör için
+
+// Pin Bağlantıları
+// TCRT5000 sensör 1 (Sol): RA0 (Dijital giriş)
+// TCRT5000 sensör 2 (Sağ): RA1 (Dijital giriş)
+// L298N motor kontrol:
+// IN1: RC3 (Sol motor ileri)
+// IN2: RC4 (Sol motor geri)
+// IN3: RC5 (Sağ motor ileri)
+// IN4: RC6 (Sağ motor geri)
+// Enable1: RC1 (PWM)
+// Enable2: RC2 (PWM)
+
+int sen0, sen1;  // Sensör verileri
+int pwmDuty = 127; // Sabit PWM duty cycle değeri
+
+void leerSensores(void)
+{
+    sen0 = input(PIN_A0);  // Sol sensör (Dijital giriş)
+    sen1 = input(PIN_A1);  // Sağ sensör (Dijital giriş)
+}
+
+void motorControl(int leftMotor, int rightMotor) {
+    // Sol motor yön kontrolü (IN1 ve IN2)
+    if (rightMotor > 0) {
+        output_high(PIN_C3);  // Sol motor ileri (IN1)
+        output_low(PIN_C4);   // Sol motor geri (IN2)
+    } else {
+        output_low(PIN_C3);   // Sol motor dur
+        output_low(PIN_C4);   // Sol motor dur
+    }
+
+    // Sağ motor yön kontrolü (IN3 ve IN4)
+    if (leftMotor > 0) {
+        output_high(PIN_C5);  // Sağ motor ileri (IN3)
+        output_low(PIN_C6);   // Sağ motor geri (IN4)
+    } else {
+        output_low(PIN_C5);   // Sağ motor dur
+        output_low(PIN_C6);   // Sağ motor dur
+    }
+
+    // PWM ayarları
+    set_pwm1_duty(leftMotor);  // Sol motor PWM (RC1)
+    set_pwm2_duty(rightMotor); // Sağ motor PWM (RC2)
+}
+
+void main() {
+    set_tris_a(0xFF);  // RA0 ve RA1 giriş (Sensörler)
+    set_tris_c(0x00);  // RC çıkış (Motor kontrol)
+
+    setup_ccp1(CCP_PWM);  // CCP1 PWM olarak ayarlandı (RC1)
+    setup_ccp2(CCP_PWM);  // CCP2 PWM olarak ayarlandı (RC2)
+    setup_timer_2(T2_DIV_BY_4, 255, 1);  // Timer2 ayarlandı
+
+    while (TRUE) {
+        leerSensores();  // Sensör verilerini oku
+
+        if (sen0 == 1 && sen1 == 1) {  // Her iki sensör siyah
+            motorControl(0, 0);  // Motorları durdur
+        }
+        else if (sen0 == 0 && sen1 == 1) {  // Sol sensör siyah, sağ beyaz
+            motorControl(pwmDuty, 0);  // Sol motor ileri, sağ motor dur
+        }
+        else if (sen0 == 1 && sen1 == 0) {  // Sağ sensör siyah, sol beyaz
+            motorControl(0, pwmDuty);  // Sağ motor ileri, sol motor dur
+        }
+        else if (sen0 == 0 && sen1 == 0) {  // Her iki sensör beyaz
+            motorControl(pwmDuty, pwmDuty);  // Her iki motor ileri
+        }
+
+        delay_ms(10);  // Gecikme
+    }
+}
